@@ -67,16 +67,35 @@ export function ARMeasure({ onMeasurement, onCancel }: ARMeasureProps) {
     }
   };
 
-  const handleVideoClick = useCallback((e: React.MouseEvent<HTMLVideoElement>) => {
-    if (!videoRef.current || !canvasRef.current) return;
+  const handleVideoClick = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     
-    const video = videoRef.current;
+    if (!canvasRef.current) {
+      console.error('Canvas ref not available');
+      return;
+    }
+    
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
     
+    // Get touch or mouse coordinates
+    let clientX, clientY;
+    if ('touches' in e) {
+      const touch = e.touches[0] || e.changedTouches[0];
+      if (!touch) return;
+      clientX = touch.clientX;
+      clientY = touch.clientY;
+    } else {
+      clientX = (e as React.MouseEvent).clientX;
+      clientY = (e as React.MouseEvent).clientY;
+    }
+    
     // Calculate click position relative to canvas
-    const x = (e.clientX - rect.left) * (canvas.width / rect.width);
-    const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+    const x = (clientX - rect.left) * (canvas.width / rect.width);
+    const y = (clientY - rect.top) * (canvas.height / rect.height);
+    
+    console.log('AR tap detected at:', { x, y, clientX, clientY });
     
     setPoints(prev => {
       const newPoints = [...prev, { x, y }];
@@ -84,18 +103,20 @@ export function ARMeasure({ onMeasurement, onCancel }: ARMeasureProps) {
       // Draw point on canvas
       const ctx = canvas.getContext('2d');
       if (ctx) {
+        console.log('Drawing point on canvas');
+        
         ctx.beginPath();
-        ctx.arc(x, y, 8, 0, Math.PI * 2);
+        ctx.arc(x, y, 10, 0, Math.PI * 2);
         ctx.fillStyle = '#3b82f6';
         ctx.fill();
         ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 3;
         ctx.stroke();
         
         // Label the point
         ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 14px sans-serif';
-        ctx.fillText(`${newPoints.length}`, x + 10, y - 10);
+        ctx.font = 'bold 16px sans-serif';
+        ctx.fillText(`${newPoints.length}`, x + 12, y - 12);
         
         // Draw line if we have 2+ points
         if (newPoints.length >= 2) {
@@ -104,8 +125,8 @@ export function ARMeasure({ onMeasurement, onCancel }: ARMeasureProps) {
           ctx.moveTo(lastPoint.x, lastPoint.y);
           ctx.lineTo(x, y);
           ctx.strokeStyle = '#3b82f6';
-          ctx.lineWidth = 2;
-          ctx.setLineDash([5, 5]);
+          ctx.lineWidth = 3;
+          ctx.setLineDash([10, 5]);
           ctx.stroke();
           ctx.setLineDash([]);
         }
@@ -175,8 +196,9 @@ export function ARMeasure({ onMeasurement, onCancel }: ARMeasureProps) {
           autoPlay
           playsInline
           muted
-          className="absolute inset-0 w-full h-full object-cover"
+          className="absolute inset-0 w-full h-full object-cover touch-none"
           onClick={handleVideoClick}
+          onTouchStart={handleVideoClick}
         />
         
         {/* Canvas overlay for drawing */}

@@ -48,23 +48,45 @@ export function CameraPreview({ onCapture, onCancel }: CameraPreviewProps) {
   };
 
   const handleCapture = useCallback(() => {
-    if (!videoRef.current || !canvasRef.current) return;
-
     const video = videoRef.current;
     const canvas = canvasRef.current;
     
+    if (!video || !canvas) {
+      console.error('Video or canvas ref is null');
+      return;
+    }
+
+    console.log('Capturing photo...', {
+      videoWidth: video.videoWidth,
+      videoHeight: video.videoHeight,
+      videoReadyState: video.readyState
+    });
+    
     // Set canvas to match video resolution
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    canvas.width = video.videoWidth || 1920;
+    canvas.height = video.videoHeight || 1080;
     
     const ctx = canvas.getContext('2d');
-    if (ctx) {
+    if (!ctx) {
+      console.error('Could not get canvas context');
+      setError('Could not create canvas context');
+      return;
+    }
+    
+    try {
       // Draw current video frame
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       
-      // Get image data
+      // Get image data as JPEG with high quality
       const imageData = canvas.toDataURL('image/jpeg', 0.95);
+      
+      console.log('Photo captured successfully, length:', imageData.length);
+      
+      // Pass to parent
       onCapture(imageData);
+    } catch (err) {
+      console.error('Capture error:', err);
+      setError('Failed to capture photo');
     }
   }, [onCapture]);
 
