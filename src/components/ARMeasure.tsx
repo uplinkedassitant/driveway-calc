@@ -38,7 +38,7 @@ export function ARMeasure({ onMeasurement, onCancel }: ARMeasureProps) {
     // Or direct ARKit integration via USDZ
     
     // Create AR anchor element
-    const modelViewer = document.createElement('model-viewer');
+    const modelViewer = document.createElement('model-viewer') as any;
     modelViewer.setAttribute('src', '#'); // Placeholder
     modelViewer.setAttribute('ar', '');
     modelViewer.setAttribute('ar-modes', 'webxr scene-viewer quick-look');
@@ -47,8 +47,10 @@ export function ARMeasure({ onMeasurement, onCancel }: ARMeasureProps) {
     
     document.body.appendChild(modelViewer);
     
-    // Activate AR
-    modelViewer.activateAR();
+    // Activate AR (type assertion for custom element)
+    if (typeof (modelViewer as any).activateAR === 'function') {
+      (modelViewer as any).activateAR();
+    }
     
     // Cleanup after use
     setTimeout(() => {
