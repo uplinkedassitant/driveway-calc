@@ -1,0 +1,55 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 240 10% 4%;
+  --foreground: 0 0% 98%;
+  --card: 240 10% 6%;
+  --card-foreground: 0 0% 98%;
+  --popover: 240 10% 6%;
+  --popover-foreground: 0 0% 98%;
+  --primary: 217 91% 60%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 240 5% 15%;
+  --secondary-foreground: 0 0% 98%;
+  --muted: 240 5% 15%;
+  --muted-foreground: 240 5% 65%;
+  --accent: 217 91% 60%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 63% 31%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 240 5% 15%;
+  --input: 240 5% 15%;
+  --ring: 217 91% 60%;
+  --radius: 0.5rem;
+}
+
+* {
+  @apply border-border;
+}
+
+body {
+  @apply bg-background text-foreground;
+  font-feature-settings: "rlig" 1, "calt" 1;
+}
+
+/* Construction-style dark theme */
+.bg-construction {
+  background: linear-gradient(135deg, hsl(var(--background)) 0%, hsl(240 10% 8%) 100%);
+}
+
+/* Canvas container */
+.canvas-container {
+  @apply relative overflow-hidden rounded-lg border border-border bg-card;
+}
+
+/* Tool button active state */
+.tool-active {
+  @apply bg-primary text-primary-foreground ring-2 ring-primary;
+}
+
+/* Slope grade colors */
+.grade-green { @apply text-green-500; }
+.grade-yellow { @apply text-yellow-500; }
+.grade-red { @apply text-red-500; }
