@@ -6,7 +6,7 @@ import { MeasurementCanvas } from "@/components/MeasurementCanvas";
 import { ARMeasure } from "@/components/ARMeasure";
 import { useMeasurementStore } from "@/store/useMeasurementStore";
 import { Button } from "@/components/ui/button";
-import { Save, FileText } from "lucide-react";
+import { Save, FileText, Trash2 } from "lucide-react";
 
 export default function Home() {
   const [image, setImage] = useState<string | null>(null);
