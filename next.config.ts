@@ -1,13 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Enable static page generation for deployment
-  output: 'export',
-  
-  // Allow unoptimized images for static export
-  images: {
-    unoptimized: true,
-  },
+  // Let Vercel handle the output configuration
+  // Static export will be automatic for static pages
 };
 
 export default nextConfig;
