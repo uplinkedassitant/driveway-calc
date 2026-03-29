@@ -52,26 +52,50 @@ export function ImageUploader({ onImageSelect }: ImageUploaderProps) {
 
   const handleCamera = useCallback(async () => {
     try {
+      // Request high quality back camera
       const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: "environment" } 
+        video: { 
+          facingMode: "environment",
+          width: { ideal: 4096 },
+          height: { ideal: 3072 },
+          aspectRatio: { ideal: 4/3 }
+        } 
       });
       
       const video = document.createElement("video");
       video.srcObject = stream;
       await video.play();
       
+      // Wait for video to be ready
+      await new Promise((resolve) => {
+        video.onloadedmetadata = () => {
+          resolve(video);
+        };
+      });
+      
       const canvas = document.createElement("canvas");
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
-      const ctx = canvas.getContext("2d");
-      ctx?.drawImage(video, 0, 0);
       
-      const imageData = canvas.toDataURL("image/jpeg");
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        setError("Could not create canvas context");
+        stream.getTracks().forEach(track => track.stop());
+        return;
+      }
+      
+      // Draw video frame to canvas
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      
+      // Get high quality JPEG
+      const imageData = canvas.toDataURL("image/jpeg", 0.95);
       onImageSelect(imageData);
       
+      // Stop camera
       stream.getTracks().forEach(track => track.stop());
     } catch (err) {
-      setError("Camera access denied or not available");
+      console.error("Camera error:", err);
+      setError("Camera access denied or not available. Please ensure you have camera permissions enabled.");
     }
   }, [onImageSelect]);
 
@@ -100,6 +124,7 @@ export function ImageUploader({ onImageSelect }: ImageUploaderProps) {
           id="file-input"
           type="file"
           accept="image/*"
+          capture="environment"
           className="hidden"
           onChange={(e) => {
             const file = e.target.files?.[0];
@@ -114,21 +139,22 @@ export function ImageUploader({ onImageSelect }: ImageUploaderProps) {
           <div>
             <p className="text-lg font-medium">Drop image here or click to upload</p>
             <p className="text-sm text-muted-foreground mt-1">
-              Supports JPG, PNG, WebP
+              Supports JPG, PNG, WebP • High resolution recommended
             </p>
           </div>
         </div>
       </div>
 
-      <div className="flex gap-4">
-        <Button onClick={handleCamera} size="lg">
+      <div className="flex gap-4 flex-wrap justify-center">
+        <Button onClick={handleCamera} size="lg" className="min-w-[160px]">
           <Camera className="w-5 h-5 mr-2" />
-          Take Photo
+          Take Photo (HD)
         </Button>
         <Button 
           variant="outline" 
           size="lg"
           onClick={() => document.getElementById("file-input")?.click()}
+          className="min-w-[160px]"
         >
           <ImageIcon className="w-5 h-5 mr-2" />
           Upload Image
@@ -136,12 +162,20 @@ export function ImageUploader({ onImageSelect }: ImageUploaderProps) {
       </div>
 
       {error && (
-        <div className="text-destructive text-sm">{error}</div>
+        <div className="text-destructive text-sm max-w-md text-center">{error}</div>
       )}
 
-      <div className="text-xs text-muted-foreground max-w-md text-center mt-4">
-        <strong>Tip:</strong> For best results, take photos from above at an angle that shows the entire area. 
-        Include a reference object (tape measure, known distance) for accurate scaling.
+      <div className="text-xs text-muted-foreground max-w-md text-center mt-4 space-y-2">
+        <p>
+          <strong>💡 Pro Tips for Accuracy:</strong>
+        </p>
+        <ul className="text-left list-disc list-inside space-y-1">
+          <li>Take photos from directly above or at a high angle</li>
+          <li>Include a tape measure or known distance in the photo</li>
+          <li>Ensure good lighting and minimal shadows</li>
+          <li>Keep camera steady and parallel to ground</li>
+          <li>For best results, use 12MP+ camera resolution</li>
+        </ul>
       </div>
     </div>
   );

@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useRef, useState, useCallback, useEffect, useMemo } from "react";
+import React, { useRef, useState, useCallback, useEffect } from "react";
 import { useMeasurementStore, Point } from "@/store/useMeasurementStore";
 import { cn, calculateShoelaceArea, calculateDistance, getGradeEmoji } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Pencil, Ruler, TrendingUp, Trash2, Undo } from "lucide-react";
+import { Pencil, Ruler, TrendingUp, Trash2, Undo, Info } from "lucide-react";
+import { Input } from "@/components/ui/input";
 
 interface MeasurementCanvasProps {
   image: string;
@@ -15,7 +16,8 @@ export function MeasurementCanvas({ image }: MeasurementCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [imageObj, setImageObj] = useState<HTMLImageElement | null>(null);
   const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
-  const [isDrawing, setIsDrawing] = useState(false);
+  const [showScaleInput, setShowScaleInput] = useState(false);
+  const [tempScaleLength, setTempScaleLength] = useState("10");
   
   const {
     activeTool,
@@ -31,6 +33,7 @@ export function MeasurementCanvas({ image }: MeasurementCanvasProps) {
     clearPerimeter,
     setScaleStart,
     setScaleEnd,
+    setScaleLength,
     setSlopeStart,
     setSlopeEnd,
   } = useMeasurementStore();
@@ -47,16 +50,20 @@ export function MeasurementCanvas({ image }: MeasurementCanvasProps) {
       setTimeout(() => {
         const container = containerRef.current;
         if (container) {
-          const maxWidth = window.innerWidth - 320;
-          const maxHeight = window.innerHeight - 200;
+          // Use larger of screen width or image width for better quality
+          const maxWidth = Math.max(window.innerWidth - 320, 1200);
+          const maxHeight = Math.max(window.innerHeight - 200, 800);
+          
+          // Fit to screen while maintaining aspect ratio
           const ratio = Math.min(
             maxWidth / img.width,
             maxHeight / img.height,
-            1
+            1 // Don't upscale
           );
+          
           setCanvasSize({
-            width: img.width * ratio,
-            height: img.height * ratio,
+            width: Math.max(img.width * ratio, 800), // Minimum 800px width
+            height: Math.max(img.height * ratio, 600),
           });
         }
       }, 100);
@@ -82,19 +89,29 @@ export function MeasurementCanvas({ image }: MeasurementCanvasProps) {
       perimeterPoints.forEach((point) => {
         ctx.lineTo(point.x, point.y);
       });
-      ctx.closePath();
+      if (activeTool === "perimeter" && perimeterPoints.length >= 3) {
+        ctx.closePath();
+      }
       ctx.fillStyle = "rgba(59, 130, 246, 0.3)";
       ctx.fill();
       ctx.strokeStyle = "#3b82f6";
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 3;
       ctx.stroke();
 
       // Draw points
-      perimeterPoints.forEach((point) => {
+      perimeterPoints.forEach((point, index) => {
         ctx.beginPath();
-        ctx.arc(point.x, point.y, 5, 0, Math.PI * 2);
+        ctx.arc(point.x, point.y, 6, 0, Math.PI * 2);
         ctx.fillStyle = "#3b82f6";
         ctx.fill();
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        // Label points
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "bold 14px sans-serif";
+        ctx.fillText(`${index + 1}`, point.x - 5, point.y - 8);
       });
     }
 
@@ -102,7 +119,7 @@ export function MeasurementCanvas({ image }: MeasurementCanvasProps) {
     if (scaleStart) {
       ctx.setLineDash([10, 5]);
       ctx.strokeStyle = "#22c55e";
-      ctx.lineWidth = 3;
+      ctx.lineWidth = 4;
       ctx.beginPath();
       ctx.moveTo(scaleStart.x, scaleStart.y);
       ctx.lineTo(
@@ -116,18 +133,30 @@ export function MeasurementCanvas({ image }: MeasurementCanvasProps) {
       [scaleStart, scaleEnd].forEach((point) => {
         if (point) {
           ctx.beginPath();
-          ctx.arc(point.x, point.y, 6, 0, Math.PI * 2);
+          ctx.arc(point.x, point.y, 8, 0, Math.PI * 2);
           ctx.fillStyle = "#22c55e";
           ctx.fill();
+          ctx.strokeStyle = "#ffffff";
+          ctx.lineWidth = 2;
+          ctx.stroke();
         }
       });
+      
+      // Label scale
+      if (scaleEnd) {
+        const midX = (scaleStart.x + scaleEnd.x) / 2;
+        const midY = (scaleStart.y + scaleEnd.y) / 2;
+        ctx.fillStyle = "#22c55e";
+        ctx.font = "bold 16px sans-serif";
+        ctx.fillText(`${scaleLengthFeet} ft`, midX + 10, midY - 10);
+      }
     }
 
     // Draw slope line
     if (slopeStart) {
       ctx.setLineDash([10, 5]);
       ctx.strokeStyle = "#f59e0b";
-      ctx.lineWidth = 3;
+      ctx.lineWidth = 4;
       ctx.beginPath();
       ctx.moveTo(slopeStart.x, slopeStart.y);
       ctx.lineTo(
@@ -140,13 +169,16 @@ export function MeasurementCanvas({ image }: MeasurementCanvasProps) {
       [slopeStart, slopeEnd].forEach((point) => {
         if (point) {
           ctx.beginPath();
-          ctx.arc(point.x, point.y, 6, 0, Math.PI * 2);
+          ctx.arc(point.x, point.y, 8, 0, Math.PI * 2);
           ctx.fillStyle = "#f59e0b";
           ctx.fill();
+          ctx.strokeStyle = "#ffffff";
+          ctx.lineWidth = 2;
+          ctx.stroke();
         }
       });
     }
-  }, [imageObj, perimeterPoints, scaleStart, scaleEnd, slopeStart, slopeEnd, canvasSize]);
+  }, [imageObj, perimeterPoints, scaleStart, scaleEnd, scaleLengthFeet, slopeStart, slopeEnd, activeTool]);
 
   const getCanvasCoordinates = (e: React.MouseEvent<HTMLCanvasElement>): Point => {
     const canvas = canvasRef.current;
@@ -163,8 +195,6 @@ export function MeasurementCanvas({ image }: MeasurementCanvasProps) {
   };
 
   const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (isDrawing) return;
-    
     const point = getCanvasCoordinates(e);
     
     if (activeTool === "perimeter") {
@@ -175,6 +205,7 @@ export function MeasurementCanvas({ image }: MeasurementCanvasProps) {
       } else if (!scaleEnd) {
         setScaleEnd(point);
         setActiveTool(null);
+        setShowScaleInput(true);
       }
     } else if (activeTool === "slope") {
       if (!slopeStart) {
@@ -216,26 +247,47 @@ export function MeasurementCanvas({ image }: MeasurementCanvasProps) {
     }
   };
 
+  const handleScaleSubmit = () => {
+    const length = parseFloat(tempScaleLength);
+    if (length > 0) {
+      setScaleLength(length);
+    }
+    setShowScaleInput(false);
+  };
+
   // Calculate measurements
   const scalePixels = scaleStart && scaleEnd ? calculateDistance(scaleStart, scaleEnd) : 0;
   const slopePixels = slopeStart && slopeEnd ? calculateDistance(slopeStart, slopeEnd) : 0;
   
+  // Calculate area using Shoelace formula
   const areaPixels = calculateShoelaceArea(perimeterPoints);
-  const areaSqFt = scalePixels > 0 && perimeterPoints.length >= 3
-    ? (areaPixels / (scalePixels * scalePixels)) * (scaleLengthFeet * scaleLengthFeet)
+  
+  // Convert to real-world square feet
+  // If scale line is 100 pixels = 10 feet, then scale factor = 10/100 = 0.1 feet per pixel
+  // Area conversion: (area in pixels) × (scale factor)² = area in sq ft
+  const scaleFeetPerPixel = scalePixels > 0 ? scaleLengthFeet / scalePixels : 0;
+  const areaSqFt = scaleFeetPerPixel > 0 && perimeterPoints.length >= 3
+    ? areaPixels * (scaleFeetPerPixel * scaleFeetPerPixel)
     : 0;
   
-  const slopeRunFeet = scalePixels > 0 && slopePixels > 0
-    ? (slopePixels / scalePixels) * scaleLengthFeet
+  // Calculate slope run in feet
+  const slopeRunFeet = scaleFeetPerPixel > 0 && slopePixels > 0
+    ? slopePixels * scaleFeetPerPixel
     : 0;
   
+  // Calculate grade percentage
   const grade = slopeRunFeet > 0 && slopeRiseInches > 0
     ? ((slopeRiseInches / 12) / slopeRunFeet) * 100
     : 0;
 
   // Material estimates
-  const asphaltTons = areaSqFt > 0 ? (areaSqFt * 0.25 * 150) / 2000 : 0;
-  const concreteYards = areaSqFt > 0 ? (areaSqFt * 0.33) / 27 : 0;
+  // Asphalt: typically 112 lbs/sq ft per inch of thickness
+  // For 3" thickness: area × 3 × 112 / 2000 = tons
+  const asphaltTons = areaSqFt > 0 ? (areaSqFt * 3 * 112) / 2000 : 0;
+  
+  // Concrete: typically 0.0025 cubic yards per sq ft per inch
+  // For 4" thickness: area × 4 × 0.0025 = cubic yards
+  const concreteYards = areaSqFt > 0 ? areaSqFt * 4 * 0.0025 : 0;
 
   return (
     <div className="flex flex-col lg:flex-row gap-4">
@@ -268,11 +320,17 @@ export function MeasurementCanvas({ image }: MeasurementCanvasProps) {
           <Button
             variant={activeTool === "scale" ? "default" : "outline"}
             size="sm"
-            onClick={() => setActiveTool(activeTool === "scale" ? null : "scale")}
+            onClick={() => {
+              setActiveTool(activeTool === "scale" ? null : "scale");
+              if (scaleStart && scaleEnd) {
+                setScaleStart(null);
+                setScaleEnd(null);
+              }
+            }}
             className={cn(activeTool === "scale" && "tool-active")}
           >
             <Ruler className="w-4 h-4 mr-2" />
-            Set Scale
+            {scaleStart && scaleEnd ? "Reset Scale" : "Set Scale"}
           </Button>
           <Button
             variant={activeTool === "slope" ? "default" : "outline"}
@@ -295,45 +353,106 @@ export function MeasurementCanvas({ image }: MeasurementCanvasProps) {
       </div>
       
       {/* Results Sidebar */}
-      <div className="w-full lg:w-72 space-y-4">
+      <div className="w-full lg:w-80 space-y-4">
         <div className="p-4 rounded-lg border bg-card">
-          <h3 className="font-semibold mb-3">Measurements</h3>
+          <h3 className="font-semibold mb-3 flex items-center gap-2">
+            <Info className="w-4 h-4" />
+            Measurements
+          </h3>
           
-          <div className="space-y-3">
-            <div>
-              <div className="text-sm text-muted-foreground">Area</div>
-              <div className="text-2xl font-bold">
-                {areaSqFt.toFixed(1)} <span className="text-sm">sq ft</span>
+          <div className="space-y-4">
+            <div className="p-3 rounded bg-background">
+              <div className="text-sm text-muted-foreground mb-1">Area</div>
+              <div className="text-3xl font-bold">
+                {areaSqFt.toFixed(1)} 
+                <span className="text-sm text-muted-foreground ml-1">sq ft</span>
               </div>
+              {perimeterPoints.length < 3 && (
+                <div className="text-xs text-muted-foreground mt-1">
+                  Draw at least 3 points for area
+                </div>
+              )}
             </div>
             
-            <div>
-              <div className="text-sm text-muted-foreground">Grade</div>
-              <div className="text-2xl font-bold">
+            <div className="p-3 rounded bg-background">
+              <div className="text-sm text-muted-foreground mb-1">Grade / Slope</div>
+              <div className="text-3xl font-bold">
                 {grade.toFixed(2)}%
-                <span className="ml-2">{grade !== 0 && getGradeEmoji(grade)}</span>
+                <span className="ml-2 text-lg">{grade !== 0 && getGradeEmoji(grade)}</span>
               </div>
+              {slopeRiseInches === 0 && (
+                <div className="text-xs text-muted-foreground mt-1">
+                  Enter rise to calculate grade
+                </div>
+              )}
             </div>
           </div>
           
           <div className="mt-4 pt-4 border-t">
             <div className="text-sm font-medium mb-2">Material Estimates</div>
-            <div className="text-sm space-y-1">
-              <div>Asphalt (3&quot;): <strong>{asphaltTons.toFixed(2)} tons</strong></div>
-              <div>Concrete (4&quot;): <strong>{concreteYards.toFixed(2)} yd³</strong></div>
+            <div className="text-sm space-y-2">
+              <div className="p-2 rounded bg-background">
+                <div className="text-xs text-muted-foreground">Asphalt (3" thick)</div>
+                <div className="font-semibold">{asphaltTons.toFixed(2)} tons</div>
+              </div>
+              <div className="p-2 rounded bg-background">
+                <div className="text-xs text-muted-foreground">Concrete (4" thick)</div>
+                <div className="font-semibold">{concreteYards.toFixed(2)} yd³</div>
+              </div>
             </div>
           </div>
           
           <div className="mt-4 pt-4 border-t">
             <div className="text-sm text-muted-foreground mb-2">Scale Reference</div>
-            <div className="text-sm">
-              {scalePixels > 0 ? `${scaleLengthFeet} ft` : "Not set"}
-            </div>
+            {scalePixels > 0 ? (
+              <div className="p-2 rounded bg-background">
+                <div className="text-sm">
+                  <span className="font-semibold">{scaleLengthFeet} ft</span> = {scalePixels.toFixed(0)} pixels
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  Scale: {scaleFeetPerPixel.toFixed(4)} ft/pixel
+                </div>
+              </div>
+            ) : (
+              <div className="text-sm">
+                Not set - use "Set Scale" tool
+              </div>
+            )}
           </div>
+          
+          {/* Scale length input */}
+          {showScaleInput && (
+            <div className="mt-4 p-3 rounded bg-background border">
+              <label className="text-sm font-medium block mb-2">
+                Enter scale length (feet):
+              </label>
+              <div className="flex gap-2">
+                <Input
+                  type="number"
+                  value={tempScaleLength}
+                  onChange={(e) => setTempScaleLength(e.target.value)}
+                  className="flex-1"
+                  step="0.1"
+                />
+                <Button onClick={handleScaleSubmit} size="sm">
+                  Set
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                This is the real-world distance between your two scale points
+              </p>
+            </div>
+          )}
         </div>
         
         <div className="p-4 rounded-lg border bg-card text-xs text-muted-foreground">
-          <strong>⚠️ Disclaimer:</strong> Photo-based estimates only. Verify with physical tools on-site for accuracy.
+          <strong>⚠️ Accuracy Tips:</strong>
+          <ul className="list-disc list-inside mt-2 space-y-1">
+            <li>Set scale using a known distance in photo</li>
+            <li>Take photos from directly above for best accuracy</li>
+            <li>Use longer scale references for better precision</li>
+            <li>Verify critical measurements on-site</li>
+          </ul>
         </div>
       </div>
     </div>
