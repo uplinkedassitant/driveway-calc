@@ -1,23 +1,12 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Enable static page generation for PWA
+  // Enable static page generation for deployment
   output: 'export',
   
-  // Allow image domains
+  // Allow unoptimized images for static export
   images: {
-    unoptimized: true, // Required for static export
-  },
-  
-  // Disable server-side features for static export
-  webpack: (config, { isServer }) => {
-    if (!isServer) {
-      config.resolve.fallback = {
-        ...config.resolve.fallback,
-        fs: false,
-      };
-    }
-    return config;
+    unoptimized: true,
   },
 };
 
