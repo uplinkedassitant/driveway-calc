@@ -8,9 +8,10 @@ import { cn } from "@/lib/utils";
 interface ImageUploaderProps {
   onImageSelect: (image: string) => void;
   onARMode?: () => void;
+  onCameraMode?: () => void;
 }
 
-export function ImageUploader({ onImageSelect, onARMode }: ImageUploaderProps) {
+export function ImageUploader({ onImageSelect, onARMode, onCameraMode }: ImageUploaderProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState("");
 
@@ -51,54 +52,10 @@ export function ImageUploader({ onImageSelect, onARMode }: ImageUploaderProps) {
     setIsDragging(false);
   }, []);
 
-  const handleCamera = useCallback(async () => {
-    try {
-      // Request high quality back camera
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { 
-          facingMode: "environment",
-          width: { ideal: 4096 },
-          height: { ideal: 3072 },
-          aspectRatio: { ideal: 4/3 }
-        } 
-      });
-      
-      const video = document.createElement("video");
-      video.srcObject = stream;
-      await video.play();
-      
-      // Wait for video to be ready
-      await new Promise((resolve) => {
-        video.onloadedmetadata = () => {
-          resolve(video);
-        };
-      });
-      
-      const canvas = document.createElement("canvas");
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      
-      const ctx = canvas.getContext("2d");
-      if (!ctx) {
-        setError("Could not create canvas context");
-        stream.getTracks().forEach(track => track.stop());
-        return;
-      }
-      
-      // Draw video frame to canvas
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      
-      // Get high quality JPEG
-      const imageData = canvas.toDataURL("image/jpeg", 0.95);
-      onImageSelect(imageData);
-      
-      // Stop camera
-      stream.getTracks().forEach(track => track.stop());
-    } catch (err) {
-      console.error("Camera error:", err);
-      setError("Camera access denied or not available. Please ensure you have camera permissions enabled.");
-    }
-  }, [onImageSelect]);
+  const handleCamera = useCallback(() => {
+    // Use the camera preview component instead
+    onCameraMode?.();
+  }, [onCameraMode]);
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6">

@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { ImageUploader } from "@/components/ImageUploader";
 import { MeasurementCanvas } from "@/components/MeasurementCanvas";
 import { ARMeasure } from "@/components/ARMeasure";
+import { CameraPreview } from "@/components/CameraPreview";
 import { useMeasurementStore } from "@/store/useMeasurementStore";
 import { Button } from "@/components/ui/button";
 import { Save, FileText, Trash2 } from "lucide-react";
@@ -12,6 +13,7 @@ export default function Home() {
   const [image, setImage] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [showAR, setShowAR] = useState(false);
+  const [showCamera, setShowCamera] = useState(false);
   const { savedJobs, saveJob, deleteJob, loadJob } = useMeasurementStore();
 
   const handleImageSelect = (imageData: string) => {
@@ -26,11 +28,13 @@ export default function Home() {
   };
 
   const handleARMeasurement = (distanceFeet: number) => {
-    // AR measurement complete
-    // Could create image from AR capture or use existing workflow
     setShowAR(false);
-    // For now, just show success message
-    alert(`Measured: ${distanceFeet.toFixed(2)} feet`);
+    alert(`AR Measurement: ${distanceFeet.toFixed(2)} feet\n(Calibration needed for accurate measurements)`);
+  };
+
+  const handleCameraCapture = (imageData: string) => {
+    setImage(imageData);
+    setShowCamera(false);
   };
 
   return (
@@ -64,6 +68,7 @@ export default function Home() {
           <ImageUploader 
             onImageSelect={handleImageSelect}
             onARMode={() => setShowAR(true)}
+            onCameraMode={() => setShowCamera(true)}
           />
         ) : (
           <div>
@@ -85,10 +90,16 @@ export default function Home() {
         {/* AR Measure Modal */}
         {showAR && (
           <ARMeasure 
-            onMeasurement={(distance) => {
-              handleARMeasurement(distance);
-            }}
+            onMeasurement={handleARMeasurement}
             onCancel={() => setShowAR(false)}
+          />
+        )}
+
+        {/* Camera Preview Modal */}
+        {showCamera && (
+          <CameraPreview 
+            onCapture={handleCameraCapture}
+            onCancel={() => setShowCamera(false)}
           />
         )}
 

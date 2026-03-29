@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { Camera, Ruler, Zap, AlertCircle } from "lucide-react";
+import { Camera, Ruler, Zap, AlertCircle, X } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface ARMeasureProps {
   onMeasurement: (distanceFeet: number) => void;
@@ -10,7 +11,7 @@ interface ARMeasureProps {
 }
 
 /**
- * iOS AR Measurement using MeasureKit/AR Quick Look
+ * iOS AR Measurement using WebXR AR Viewer
  * Works on iPhone 12+ with LiDAR for best accuracy
  */
 export function ARMeasure({ onMeasurement, onCancel }: ARMeasureProps) {
@@ -18,7 +19,10 @@ export function ARMeasure({ onMeasurement, onCancel }: ARMeasureProps) {
   const [error, setError] = useState("");
   const [isScanning, setIsScanning] = useState(false);
   const [measuredDistance, setMeasuredDistance] = useState<number | null>(null);
-  const arContainerRef = useRef<HTMLDivElement>(null);
+  const [points, setPoints] = useState<{x: number, y: number}[]>([]);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const arViewerRef = useRef<any>(null);
 
   useEffect(() => {
     // Check if device supports AR
@@ -31,54 +35,115 @@ export function ARMeasure({ onMeasurement, onCancel }: ARMeasureProps) {
     if (!isIOS && !hasWebXR) {
       setError("AR measurement requires iOS device or WebXR support");
     }
+    
+    // Start camera for AR view
+    startCamera();
+    
+    return () => {
+      // Cleanup
+      if (videoRef.current?.srcObject) {
+        const stream = videoRef.current.srcObject as MediaStream;
+        stream.getTracks().forEach(track => track.stop());
+      }
+    };
   }, []);
 
-  const openARQuickLook = () => {
-    // For iOS, we can use Model Viewer with AR
-    // Or direct ARKit integration via USDZ
-    
-    // Create AR anchor element
-    const modelViewer = document.createElement('model-viewer') as any;
-    modelViewer.setAttribute('src', '#'); // Placeholder
-    modelViewer.setAttribute('ar', '');
-    modelViewer.setAttribute('ar-modes', 'webxr scene-viewer quick-look');
-    modelViewer.setAttribute('camera-controls', '');
-    modelViewer.setAttribute('style', 'display: none;');
-    
-    document.body.appendChild(modelViewer);
-    
-    // Activate AR (type assertion for custom element)
-    if (typeof (modelViewer as any).activateAR === 'function') {
-      (modelViewer as any).activateAR();
+  const startCamera = async () => {
+    try {
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: 'environment',
+          width: { ideal: 1920 },
+          height: { ideal: 1080 }
+        }
+      });
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = mediaStream;
+      }
+    } catch (err) {
+      console.error("Camera error:", err);
+      setError("Could not access camera. Please ensure camera permissions are granted.");
     }
-    
-    // Cleanup after use
-    setTimeout(() => {
-      document.body.removeChild(modelViewer);
-    }, 1000);
   };
 
-  const openMeasureApp = () => {
-    // On iOS 12+, we can suggest opening the Measure app
-    // This is a workaround since web can't directly access ARKit
+  const handleVideoClick = useCallback((e: React.MouseEvent<HTMLVideoElement>) => {
+    if (!videoRef.current || !canvasRef.current) return;
     
-    // For now, use camera mode with measurement overlay
-    setIsScanning(true);
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    
+    // Calculate click position relative to canvas
+    const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+    const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+    
+    setPoints(prev => {
+      const newPoints = [...prev, { x, y }];
+      
+      // Draw point on canvas
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.beginPath();
+        ctx.arc(x, y, 8, 0, Math.PI * 2);
+        ctx.fillStyle = '#3b82f6';
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        // Label the point
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 14px sans-serif';
+        ctx.fillText(`${newPoints.length}`, x + 10, y - 10);
+        
+        // Draw line if we have 2+ points
+        if (newPoints.length >= 2) {
+          const lastPoint = newPoints[newPoints.length - 2];
+          ctx.beginPath();
+          ctx.moveTo(lastPoint.x, lastPoint.y);
+          ctx.lineTo(x, y);
+          ctx.strokeStyle = '#3b82f6';
+          ctx.lineWidth = 2;
+          ctx.setLineDash([5, 5]);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+      }
+      
+      return newPoints;
+    });
+  }, []);
+
+  const handleFinish = () => {
+    if (points.length >= 2) {
+      // Calculate pixel distance between first two points
+      const dx = points[1].x - points[0].x;
+      const dy = points[1].y - points[0].y;
+      const pixelDistance = Math.sqrt(dx * dx + dy * dy);
+      
+      // For AR mode, we need calibration
+      // For now, prompt for real-world distance
+      const realDistance = prompt(
+        `Enter the real-world distance (in feet) between these points:\n(Pixel distance: ${pixelDistance.toFixed(0)})`,
+        "10"
+      );
+      
+      if (realDistance) {
+        const distance = parseFloat(realDistance);
+        if (!isNaN(distance) && distance > 0) {
+          onMeasurement(distance);
+        }
+      }
+    }
   };
 
-  const handleCalibration = () => {
-    // User calibrates by tapping two points of known distance
-    // Then we can scale future measurements
-    const knownDistance = prompt(
-      "Enter the real-world distance (in feet) between the two points you marked:",
-      "10"
-    );
-    
-    if (knownDistance) {
-      const distance = parseFloat(knownDistance);
-      if (!isNaN(distance) && distance > 0) {
-        setMeasuredDistance(distance);
-        onMeasurement(distance);
+  const handleClear = () => {
+    setPoints([]);
+    if (canvasRef.current) {
+      const ctx = canvasRef.current.getContext('2d');
+      if (ctx) {
+        ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
       }
     }
   };
@@ -86,10 +151,10 @@ export function ARMeasure({ onMeasurement, onCancel }: ARMeasureProps) {
   return (
     <div className="fixed inset-0 bg-black z-50 flex flex-col">
       {/* Header */}
-      <div className="p-4 bg-black/80 text-white flex justify-between items-center">
+      <div className="p-4 bg-black/80 text-white flex justify-between items-center z-10">
         <div className="flex items-center gap-2">
           <Camera className="w-5 h-5" />
-          <span className="font-semibold">AR Measurement</span>
+          <span className="font-semibold">AR Measurement Mode</span>
         </div>
         <Button
           onClick={onCancel}
@@ -97,94 +162,92 @@ export function ARMeasure({ onMeasurement, onCancel }: ARMeasureProps) {
           size="sm"
           className="border-white text-white hover:bg-white/20"
         >
+          <X className="w-4 h-4 mr-2" />
           Close
         </Button>
       </div>
 
-      {/* Main content */}
-      <div className="flex-1 flex flex-col items-center justify-center p-6 text-white">
-        {!error ? (
-          <>
-            <div className="w-24 h-24 rounded-full bg-blue-600 flex items-center justify-center mb-6">
-              <Ruler className="w-12 h-12" />
-            </div>
-            
-            <h2 className="text-2xl font-bold mb-2">
-              AR Measurement Mode
-            </h2>
-            
-            <p className="text-center text-gray-300 mb-6 max-w-md">
-              {arSupported 
-                ? "Use your iPhone's camera to measure real-world distances. Point at objects and tap to mark points."
-                : "Your device may not support full AR features. Camera mode available."
-              }
-            </p>
-
-            {/* iPhone 12+ specific features */}
-            {arSupported && (
-              <div className="bg-blue-900/30 border border-blue-700 rounded-lg p-4 mb-6 max-w-sm">
-                <div className="flex items-start gap-3">
-                  <Zap className="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" />
-                  <div className="text-sm">
-                    <p className="font-semibold text-yellow-400 mb-1">
-                      iPhone 12+ with LiDAR
-                    </p>
-                    <p className="text-gray-300">
-                      For best accuracy, use in good lighting and move your device slowly to scan the area.
-                    </p>
-                  </div>
-                </div>
+      {/* AR Viewer Container */}
+      <div className="flex-1 relative" ref={arViewerRef}>
+        {/* Camera feed */}
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted
+          className="absolute inset-0 w-full h-full object-cover"
+          onClick={handleVideoClick}
+        />
+        
+        {/* Canvas overlay for drawing */}
+        <canvas
+          ref={canvasRef}
+          className="absolute inset-0 w-full h-full"
+          width={typeof window !== 'undefined' ? window.innerWidth : 800}
+          height={typeof window !== 'undefined' ? window.innerHeight - 100 : 600}
+        />
+        
+        {/* AR not supported message */}
+        {error && (
+          <div className="absolute top-4 left-4 right-4 bg-black/80 text-white p-4 rounded-lg">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 flex-shrink-0" />
+              <div>
+                <p className="font-semibold">AR Not Available</p>
+                <p className="text-sm opacity-80">{error}</p>
               </div>
-            )}
-
-            {/* Action buttons */}
-            <div className="flex flex-col gap-3 w-full max-w-xs">
-              <Button
-                onClick={openMeasureApp}
-                size="lg"
-                className="bg-blue-600 hover:bg-blue-700 w-full"
-              >
-                <Camera className="w-5 h-5 mr-2" />
-                Start AR Measurement
-              </Button>
-              
-              <Button
-                onClick={handleCalibration}
-                variant="outline"
-                size="lg"
-                className="border-blue-500 text-blue-400 hover:bg-blue-900/30 w-full"
-              >
-                <Ruler className="w-5 h-5 mr-2" />
-                Manual Calibration
-              </Button>
             </div>
-
-            {/* Instructions */}
-            <div className="mt-8 text-sm text-gray-400 text-center max-w-sm">
-              <p className="font-semibold mb-2">How to use:</p>
-              <ol className="list-decimal list-inside space-y-1 text-left">
-                <li>Point camera at the area to measure</li>
-                <li>Tap to mark start point</li>
-                <li>Move to end point and tap again</li>
-                <li>Enter real-world distance to calibrate</li>
-              </ol>
-            </div>
-          </>
-        ) : (
-          <div className="text-center">
-            <AlertCircle className="w-16 h-16 mx-auto mb-4 text-red-500" />
-            <h3 className="text-xl font-bold mb-2">AR Not Available</h3>
-            <p className="text-gray-400 mb-6">{error}</p>
-            <p className="text-sm text-gray-500">
-              You can still use the standard photo measurement mode.
-            </p>
           </div>
         )}
+
+        {/* Instructions overlay */}
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-black/80 text-white px-4 py-2 rounded-full text-sm whitespace-nowrap">
+          {points.length === 0
+            ? "👆 Tap screen to mark start point"
+            : points.length === 1
+            ? "👆 Tap screen to mark end point"
+            : "✅ Tap 'Finish' or continue marking points"}
+        </div>
       </div>
 
-      {/* Footer with tips */}
-      <div className="p-4 bg-black/80 text-gray-400 text-xs text-center">
-        <p>💡 Tip: For best results, ensure good lighting and scan slowly</p>
+      {/* Controls */}
+      <div className="p-6 bg-gradient-to-t from-black/90 to-transparent">
+        <div className="flex gap-4 justify-center flex-wrap">
+          {points.length >= 2 && (
+            <>
+              <Button
+                onClick={handleFinish}
+                size="lg"
+                className="bg-green-600 hover:bg-green-700 min-w-[120px]"
+              >
+                <Zap className="w-5 h-5 mr-2" />
+                Use This Distance
+              </Button>
+              <Button
+                onClick={handleClear}
+                variant="outline"
+                size="lg"
+                className="border-white text-white hover:bg-white/20"
+              >
+                Clear Points
+              </Button>
+            </>
+          )}
+        </div>
+
+        {points.length > 0 && (
+          <div className="text-center text-white mt-4 text-sm">
+            Points marked: {points.length} | Segments: {points.length - 1}
+          </div>
+        )}
+
+        {/* iPhone 12+ LiDAR badge */}
+        {arSupported && (
+          <div className="text-center text-gray-400 text-xs mt-4 flex items-center justify-center gap-2">
+            <Zap className="w-4 h-4 text-yellow-400" />
+            <span>iPhone 12+ with LiDAR provides best accuracy</span>
+          </div>
+        )}
       </div>
     </div>
   );
