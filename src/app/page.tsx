@@ -3,15 +3,16 @@
 import React, { useState } from "react";
 import { ImageUploader } from "@/components/ImageUploader";
 import { MeasurementCanvas } from "@/components/MeasurementCanvas";
+import { ARMeasure } from "@/components/ARMeasure";
 import { useMeasurementStore } from "@/store/useMeasurementStore";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Save, FileText, Settings, Trash2 } from "lucide-react";
+import { Save, FileText } from "lucide-react";
 
 export default function Home() {
   const [image, setImage] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
-  const { savedJobs, saveJob, deleteJob, loadJob, currentJob } = useMeasurementStore();
+  const [showAR, setShowAR] = useState(false);
+  const { savedJobs, saveJob, deleteJob, loadJob } = useMeasurementStore();
 
   const handleImageSelect = (imageData: string) => {
     setImage(imageData);
@@ -22,6 +23,14 @@ export default function Home() {
     if (name) {
       saveJob();
     }
+  };
+
+  const handleARMeasurement = (distanceFeet: number) => {
+    // AR measurement complete
+    // Could create image from AR capture or use existing workflow
+    setShowAR(false);
+    // For now, just show success message
+    alert(`Measured: ${distanceFeet.toFixed(2)} feet`);
   };
 
   return (
@@ -39,12 +48,12 @@ export default function Home() {
               onClick={() => setShowHistory(!showHistory)}
             >
               <FileText className="w-4 h-4 mr-2" />
-              {showHistory ? "Hide History" : "Job History"}
+              {showHistory ? "Hide History" : "History"}
             </Button>
             {image && (
               <Button onClick={handleSave}>
                 <Save className="w-4 h-4 mr-2" />
-                Save Job
+                Save
               </Button>
             )}
           </div>
@@ -52,7 +61,10 @@ export default function Home() {
 
         {/* Main Content */}
         {!image ? (
-          <ImageUploader onImageSelect={handleImageSelect} />
+          <ImageUploader 
+            onImageSelect={handleImageSelect}
+            onARMode={() => setShowAR(true)}
+          />
         ) : (
           <div>
             <div className="mb-4">
@@ -68,6 +80,16 @@ export default function Home() {
             </div>
             <MeasurementCanvas image={image} />
           </div>
+        )}
+
+        {/* AR Measure Modal */}
+        {showAR && (
+          <ARMeasure 
+            onMeasurement={(distance) => {
+              handleARMeasurement(distance);
+            }}
+            onCancel={() => setShowAR(false)}
+          />
         )}
 
         {/* Job History Modal */}
