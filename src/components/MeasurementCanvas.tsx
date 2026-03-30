@@ -43,7 +43,9 @@ export function MeasurementCanvas({ image }: MeasurementCanvasProps) {
     const img = new window.Image();
     img.crossOrigin = "anonymous";
     img.src = image;
+    
     img.onload = () => {
+      console.log('Image loaded:', { width: img.width, height: img.height });
       setImageObj(img);
       
       // Wait for container to be available
@@ -61,6 +63,11 @@ export function MeasurementCanvas({ image }: MeasurementCanvasProps) {
             1 // Don't upscale
           );
           
+          console.log('Setting canvas size:', {
+            width: Math.max(img.width * ratio, 800),
+            height: Math.max(img.height * ratio, 600)
+          });
+          
           setCanvasSize({
             width: Math.max(img.width * ratio, 800), // Minimum 800px width
             height: Math.max(img.height * ratio, 600),
@@ -68,9 +75,13 @@ export function MeasurementCanvas({ image }: MeasurementCanvasProps) {
         }
       }, 100);
     };
+    
+    img.onerror = (err) => {
+      console.error('Failed to load image:', err);
+    };
   }, [image]);
 
-  // Draw canvas
+  // Draw canvas whenever imageObj, perimeterPoints, or canvas changes
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !imageObj) return;
@@ -78,9 +89,15 @@ export function MeasurementCanvas({ image }: MeasurementCanvasProps) {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // Clear and draw image
+    // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(imageObj, 0, 0, canvas.width, canvas.height);
+    
+    // Draw the image
+    try {
+      ctx.drawImage(imageObj, 0, 0, canvas.width, canvas.height);
+    } catch (err) {
+      console.error('Error drawing image:', err);
+    }
 
     // Draw perimeter polygon
     if (perimeterPoints.length >= 2) {
@@ -178,7 +195,7 @@ export function MeasurementCanvas({ image }: MeasurementCanvasProps) {
         }
       });
     }
-  }, [imageObj, perimeterPoints, scaleStart, scaleEnd, scaleLengthFeet, slopeStart, slopeEnd, activeTool]);
+  }, [imageObj, perimeterPoints, scaleStart, scaleEnd, scaleLengthFeet, slopeStart, slopeEnd, activeTool, canvasSize.width, canvasSize.height]);
 
   const getCanvasCoordinates = (e: React.MouseEvent<HTMLCanvasElement>): Point => {
     const canvas = canvasRef.current;
